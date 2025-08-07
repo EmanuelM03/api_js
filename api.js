@@ -7,12 +7,12 @@ const sql = require('mssql');         // Conexão com SQL Server
 
 const app = express();
 app.use(express.json());             // Permite receber JSON no body
-const port = process.env.PORT || 3000;       // Porta do servidor, padrão 3000
-const connStr = process.env.CONNECTION_STRING; // String de conexão
-//Essa parte fornece o .env que criei com as infos do SQL Server. Cria constantes de api e sqlserver, define porta, OI CHAT
+
+const port = process.env.PORT || 3000;
+const connStr = process.env.CONNECTION_STRING;
 
 // ==========================
-// 🛠️ Conexão com o Banco - Criar pool global
+// 🛠️ Conexão com o Banco (pool global)
 // ==========================
 let pool;
 
@@ -23,14 +23,19 @@ async function getConnection() {
         console.log("✅ Conectado ao SQL Server!");
         return pool;
     } catch (err) {
-        console.error("❌ Erro na conexão:", err);
+        console.error("❌ Erro na conexão com o SQL Server:", err);
         throw err;
     }
 }
 
 // ==========================
-// 🚀 API – Rotas HTTP
+// 🚀 Rotas da API
 // ==========================
+
+// Rota padrão /
+app.get('/', (req, res) => {
+    res.json({ message: '🚀 API funcionando!' });
+});
 
 // Rota GET /usuarios – lista todos os usuários
 app.get('/usuarios', async (req, res) => {
@@ -39,24 +44,21 @@ app.get('/usuarios', async (req, res) => {
         const result = await pool.request().query('SELECT * FROM USUARIO');
         res.json(result.recordset);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Erro ao buscar usuarios' });
+        console.error("❌ Erro em /usuarios:", err);
+        res.status(500).json({ error: 'Erro ao buscar usuários' });
     }
 });
 
 // Rota POST /register – chama a procedure sp_RegistrarUsuarioSimples
 app.post('/register', async (req, res) => {
-    const {
-        NOME,
-        LOGIN,
-        SENHA,
-        SETOR,
-        NIVEL_ACESSO,
-        COD_FILIAL
-    } = req.body;
+    const { NOME, LOGIN, SENHA, SETOR, NIVEL_ACESSO, COD_FILIAL } = req.body;
+
+    if (!NOME || !LOGIN || !SENHA) {
+        return res.status(400).json({ message: "Campos obrigatórios ausentes" });
+    }
 
     try {
-        const pool = await sql.connect(connStr);
+        const pool = await getConnection();
         const request = pool.request();
 
         request.input('NOME', sql.VarChar(255), NOME);
@@ -70,12 +72,12 @@ app.post('/register', async (req, res) => {
 
         res.status(201).json({ message: 'Usuário registrado com sucesso!' });
     } catch (error) {
-        console.error(error);
+        console.error("❌ Erro em /register:", error);
         res.status(500).json({ error: 'Erro ao registrar o usuário' });
     }
 });
 
-// Rota POST /login – chama a procedure sp_Login com login e senha
+// Rota POST /login – chama a procedure sp_Login
 app.post('/login', async (req, res) => {
     const { login, senha } = req.body;
 
@@ -93,24 +95,19 @@ app.post('/login', async (req, res) => {
         const result = await request.execute('sp_Login');
 
         if (result.recordset.length === 0) {
-            // Se não encontrar usuário
             return res.status(401).json({ message: 'Login ou senha inválidos' });
         }
 
         res.json(result.recordset[0]);
     } catch (error) {
-        // Captura erro do RAISERROR do SQL Server na procedure
         if (error.number === 50000) {
             return res.status(401).json({ message: error.message });
         }
 
-        console.error("Erro no login:", error);
+        console.error("❌ Erro em /login:", error);
         res.status(500).json({ message: 'Erro interno no servidor' });
     }
 });
-
-// Rota padrão /
-app.get('/', (req, res) => res.json({ message: 'Funcionando!' }));
 
 // ==========================
 // ▶️ Inicia o servidor
