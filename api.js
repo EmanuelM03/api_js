@@ -27,7 +27,7 @@ async function getConnection() {
         throw err;
     }
 }
-
+//FORCE
 // ==========================
 // 🚀 Rotas da API
 // ==========================
